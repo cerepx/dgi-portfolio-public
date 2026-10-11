@@ -1,0 +1,519 @@
+{
+  "_comment": "Structural map of the portfolio spreadsheet. Every skill reads this before validating anything. Update it when columns or row blocks change.",
+  "google_sheet": {
+    "spreadsheet_id": "YOUR_SPREADSHEET_ID",
+    "url": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit",
+    "apps_script_webapp_url": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+    "_note": "The bridge token lives in ~/.dgi/sheet-bridge.json (chmod 600) with the web app URL, never in this file and never in the conversation."
+  },
+  "local_file": {
+    "path": "Portofoliu.xlsx",
+    "_warning": "Dead export from Google Sheets. GOOGLEFINANCE / SPARKLINE / IMPORTHTML become __xludf.DUMMYFUNCTION holding cached values. getYahooPrice() and getBVBPrice() are Apps Script and do not exist outside Google. Never write to this file and never re-upload it."
+  },
+  "reporting_currency": "USD",
+  "dividend_tax": {
+    "_comment": "Total effective tax on US dividends for a Romanian tax resident. US withholds 10% at source under the treaty; Romania taxes the gross and credits the foreign tax paid, so the total equals the Romanian rate.",
+    "brackets": [
+      {
+        "from_year": 2021,
+        "to_year": 2022,
+        "rate": 0.05,
+        "net_factor": 0.95
+      },
+      {
+        "from_year": 2023,
+        "to_year": 2023,
+        "rate": 0.08,
+        "net_factor": 0.92
+      },
+      {
+        "from_year": 2024,
+        "to_year": 2025,
+        "rate": 0.1,
+        "net_factor": 0.9
+      },
+      {
+        "from_year": 2026,
+        "to_year": null,
+        "rate": 0.16,
+        "net_factor": 0.84
+      }
+    ],
+    "current_year": 2026,
+    "current_net_factor": 0.84,
+    "legacy_net_factor": 0.9,
+    "_critical": "Column P is a CUMULATIVE historical total. Applying 0.84 to the whole string retroactively re-taxes 2024-2025 income at 16% and understates net dividends actually received. The factor must be applied per payment, by the year the payment was received. A flat string of summed numbers carries no dates, so it cannot be split correctly - that is the strongest argument for the per-payment sheet.",
+    "_open_question": "Edge case not settled here: dividends declared in 2025 but paid in 2026. For an individual reporting foreign dividend income via Declaratia Unica, the year of receipt normally governs. Confirm with a tax advisor before relying on it."
+  },
+  "sheets": {
+    "MyShares": {
+      "role": "open_positions",
+      "header_row": 1,
+      "blocks": {
+        "dgi": {
+          "first_row": 2,
+          "last_row": 18,
+          "_note": "Positions inside the DGI strategy. Included in all dividend aggregates, pie charts and growth reports. Since step 2 the row 27 aggregates key on the DGI flag column, not on these row numbers - last_row remains only as a structural hint for the audit and drifts if rows are inserted; the flag column (AA since 2026-07-31, formerly Z) is authoritative."
+        },
+        "separator": {
+          "row": 21,
+          "cell": "C21",
+          "expected_label": "Non-DGI companies:"
+        },
+        "non_dgi": {
+          "first_row": 22,
+          "last_row": 25,
+          "tickers": [
+            "PLTR",
+            "META",
+            "SXR8",
+            "BVBETF"
+          ],
+          "_note": "Tracking only. Held for visibility, deliberately EXCLUDED from every DGI calculation: annual income, income weight, dividend yield, yield on cost, growth years, DGR, dividend pie charts and growth reports. Dividend cells are intentionally left as N/A - that is correct, not a data gap. They MAY appear in total portfolio value and profit, because that is capital tracking, not DGI analysis."
+        }
+      },
+      "columns": {
+        "A": {
+          "name": "Companie",
+          "type": "formula_googlefinance",
+          "meaning": "company_name"
+        },
+        "B": {
+          "name": "Ticker",
+          "type": "text",
+          "meaning": "ticker",
+          "key": true
+        },
+        "C": {
+          "name": "Moneda",
+          "type": "text",
+          "meaning": "currency",
+          "allowed": [
+            "USD",
+            "EUR",
+            "RON"
+          ]
+        },
+        "D": {
+          "name": "Nr actiuni",
+          "type": "number",
+          "meaning": "quantity",
+          "min": 0
+        },
+        "E": {
+          "name": "Pret actual",
+          "type": "formula_live",
+          "meaning": "market_price"
+        },
+        "F": {
+          "name": "Val. actuala",
+          "type": "formula",
+          "meaning": "current_value",
+          "expected": "D*E",
+          "dgi_only_aggregate": false
+        },
+        "G": {
+          "name": "Pret mediu/act",
+          "type": "formula",
+          "meaning": "average_cost",
+          "expected": "sum_of_buys/D"
+        },
+        "H": {
+          "name": "Valoare achizitie",
+          "type": "formula",
+          "meaning": "total_cost",
+          "expected": "G*D",
+          "dgi_only_aggregate": false
+        },
+        "I": {
+          "name": "Profit",
+          "type": "formula",
+          "meaning": "absolute_profit",
+          "expected": "F-H+Q-T",
+          "dgi_only_aggregate": false
+        },
+        "J": {
+          "name": "Profit %",
+          "type": "formula",
+          "meaning": "profit_percent",
+          "expected": "I/H"
+        },
+        "K": {
+          "name": "Yield on Cost",
+          "type": "formula",
+          "meaning": "yield_on_cost",
+          "expected": "O/(H+T)",
+          "dgi_only": true,
+          "note": "Renamed 2026-07-31. Was labelled 'Div Yield' while computing Yield on Cost. True Dividend Yield now lives in column L. Do not feed K into criterion 2 of the scoring methodology - that criterion wants current yield."
+        },
+        "L": {
+          "name": "Div Yield",
+          "type": "formula",
+          "meaning": "dividend_yield",
+          "expected": "O/F",
+          "dgi_only": true,
+          "_added": "2026-07-31",
+          "note": "Column inserted by the user in Sheets, which shifted every column from the old L onwards by one. Current yield on market value - the number criterion 2 actually needs. Empty on rows 19-25, like K."
+        },
+        "M": {
+          "name": "Pondere",
+          "type": "formula",
+          "meaning": "weight",
+          "expected": "F/total_F",
+          "expected_sum": 1.0,
+          "dgi_only": true,
+          "note": "DGI-only since step 1. Non-DGI rows carry N/A. Weights sum to 100% within the DGI block. If a total-portfolio weight is ever needed it goes in a new column, never as a second formula shape here."
+        },
+        "N": {
+          "name": "Div/actiune",
+          "type": "formula",
+          "meaning": "dividend_per_share",
+          "dgi_only": true,
+          "_changed": "2026-07-31",
+          "note": "No longer hand-typed. Derives the latest 'regular' payment for the ticker from the 'Dividends received' sheet via FILTER + MAX on year*12+month, so a raise propagates the moment the payment is recorded. Order-independent by design. Specials are excluded on purpose: this is recurring income, not total cash received.",
+          "_units_warning": "This column holds the dividend PER PAYMENT, not per year. Column O multiplies it by the payment frequency. Found by cross-checking the dripinvesting screener CSV and FMP profile lastDividend. Any literal entered here must be verified against 'Current Div' in that CSV, never against 'Annualized'."
+        },
+        "O": {
+          "name": "Venit/An",
+          "type": "formula",
+          "meaning": "annual_income",
+          "expected": "N*frequency*D",
+          "dgi_only_aggregate": true,
+          "note": "Payment frequency is still hardcoded (*4, or *12 for O). Real TTM frequency could now be counted from 'Dividends received' - open item."
+        },
+        "P": {
+          "name": "Pondere Venit",
+          "type": "formula",
+          "meaning": "income_weight",
+          "expected": "O/total_O",
+          "expected_sum": 1.0,
+          "dgi_only": true
+        },
+        "Q": {
+          "name": "Div platite",
+          "type": "formula",
+          "meaning": "dividends_received_net",
+          "dgi_only_aggregate": true,
+          "note": "SUMIFS over 'Dividends received' net column, keyed on ticker. Withholding is applied per payment year by the rate table on that sheet."
+        },
+        "R": {
+          "name": "Ani crestere",
+          "type": "manual_number",
+          "meaning": "consecutive_growth_years",
+          "dgi_only": true
+        },
+        "S": {
+          "name": "% Recuperati",
+          "type": "formula",
+          "meaning": "cost_recovered",
+          "expected": "Q/H"
+        },
+        "T": {
+          "name": "Comision",
+          "type": "formula",
+          "meaning": "cumulative_fees",
+          "dgi_only_aggregate": false,
+          "note": "T13:T18 are still typed literals rather than formulas - open audit finding."
+        },
+        "U": {
+          "name": "60 days",
+          "type": "formula_live",
+          "meaning": "change_60d"
+        },
+        "V": {
+          "name": "Sector",
+          "type": "text",
+          "meaning": "sector"
+        },
+        "W": {
+          "name": "Medium price Last 365days",
+          "type": "sparkline",
+          "meaning": "chart",
+          "note": "Header label is wrong - the cell holds a sparkline, not a mean price. Pre-existing, not worth a write on its own. Colour references fixed 2026-07-31 in W16, W17, W18, W23, W24."
+        },
+        "X": {
+          "name": "52 Week Low",
+          "type": "formula_live",
+          "meaning": "low_52w"
+        },
+        "Y": {
+          "name": "52 Week High",
+          "type": "formula_live",
+          "meaning": "high_52w"
+        },
+        "Z": {
+          "name": "Seeking Alpha",
+          "type": "hyperlink",
+          "meaning": "external_link"
+        },
+        "AA": {
+          "name": "DGI",
+          "type": "boolean",
+          "meaning": "dgi_flag",
+          "note": "Added in step 1 as column Z, shifted to AA on 2026-07-31 by the column insert. TRUE for strategy positions, FALSE for tracking-only. LIVE: the row 27 aggregates (F,H,I,O,Q,T) are SUMIFS(x2:x26,$AA$2:$AA$26,TRUE), so this column is the single source of truth for the DGI boundary. Sheets rewrote the references automatically on insert - verified by reading row 27 back.",
+          "_collision_note": "RESOLVED 2026-07-31: refreshPrices() timestamp moved to MyShares!AC1 in Code.gs and in custom_price_functions.timestamp_cell. AA1 is safe."
+        }
+      },
+      "total_rows": [
+        27
+      ],
+      "totaled_columns": [
+        "F",
+        "H",
+        "I",
+        "O",
+        "Q",
+        "T"
+      ],
+      "unavailable_marker": "N/A"
+    },
+    "Dividends received": {
+      "role": "dividend_payments",
+      "header_row": 1,
+      "first_data_row": 2,
+      "_note": "One row per dividend payment received. Added to the config 2026-08-01; before that no audit check covered it, which is how the ARRAYFORMULA spill on 2026-07-31 went undetected until aggregates were re-read. This sheet is now the source of truth for MyShares N (per-payment rate) and Q (net received), so an error here propagates silently into every dividend aggregate.",
+      "_append_rule": "New rows get A:F and I. NOTE THE REVERSAL: F used to be an ARRAYFORMULA spill and this rule used to exclude it. Since item 5 (2026-08-22) F is manual, so omitting it leaves a silent hole that nothing fills. G and H ARE still ARRAYFORMULA spills, anchored in G2/H2 - writing any literal into those blocks the spill and collapses the anchor to #REF!, silently emptying the column for every prior row.",
+      "spill_anchors": {
+        "G": "G2",
+        "H": "H2"
+      },
+      "manual_columns": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "I"
+      ],
+      "columns": {
+        "A": {
+          "name": "Year",
+          "type": "number",
+          "meaning": "payment_year",
+          "min": 2000,
+          "note": "Payment year, not declaration year. Drives the tax factor lookup."
+        },
+        "B": {
+          "name": "Month",
+          "type": "number",
+          "meaning": "payment_month",
+          "min": 1,
+          "max": 12
+        },
+        "C": {
+          "name": "Ticker",
+          "type": "text",
+          "meaning": "ticker",
+          "key": true,
+          "note": "Must match MyShares column B exactly; the SUMIFS in Q and the FILTER in N key on it."
+        },
+        "D": {
+          "name": "Shares",
+          "type": "number",
+          "meaning": "shares_at_payment",
+          "min": 0,
+          "note": "Holding at the time of THIS payment, not the current holding."
+        },
+        "E": {
+          "name": "Gross per share",
+          "type": "number",
+          "meaning": "gross_per_share",
+          "min": 0,
+          "note": "Declared rate per share. MyShares N takes the most recent regular value from here."
+        },
+        "F": {
+          "name": "Gross",
+          "type": "number",
+          "meaning": "gross_amount",
+          "min": 0,
+          "expected": "D*E for rows before the Flex window; the real IBKR cash amount for rows inside it",
+          "note": "MANUAL since item 5, 2026-08-22. It used to be an ARRAYFORMULA spill of D*E, and the gross convention then changed to cash actually received, so F2 is now a deliberate literal and every row carries its own value. THIS REVERSED: a new row with no F value is a silent hole, because nothing fills it any more. For pre-window rows sheet Gross is exact shares x rate while IBKR pays cash rounded to cents, so a half-cent difference there is expected and is not an error."
+        },
+        "G": {
+          "name": "Net factor",
+          "type": "arrayformula_spill",
+          "meaning": "net_factor",
+          "spill_anchor": "G2",
+          "expected": "VLOOKUP(year, K:L)",
+          "note": "Spilled from G2. Per-payment, keyed on the payment year, which is what makes the 2026 tax change correct for older rows."
+        },
+        "H": {
+          "name": "Net",
+          "type": "arrayformula_spill",
+          "meaning": "net_amount",
+          "spill_anchor": "H2",
+          "expected": "F*G",
+          "note": "Spilled from H2. This is the column MyShares Q sums."
+        },
+        "I": {
+          "name": "Type",
+          "type": "text",
+          "meaning": "payment_type",
+          "allowed": [
+            "regular",
+            "special"
+          ],
+          "note": "Some tickers pay an annual special. N and the frequency check both filter on 'regular'; a mistyped value silently changes the per-payment rate."
+        },
+        "K": {
+          "name": "Year",
+          "type": "number",
+          "meaning": "tax_table_year",
+          "note": "Left column of the per-year withholding table. Not payment data."
+        },
+        "L": {
+          "name": "Net factor",
+          "type": "number",
+          "meaning": "tax_table_factor",
+          "note": "Right column of the per-year withholding table. A new tax year is one new row here."
+        }
+      }
+    },
+    "Cresteri Dividende": {
+      "role": "monthly_increase_view",
+      "frozen_history": false,
+      "_note": "AUTOMATED 2026-10-10 by user decision, reversing the 2026-08-01 freeze. Every computed area is now a formula reading 'Dividends received', so it is a VIEW of the same truth, not a second copy: the per-year payment grids (one MAKEARRAY each in D20, D36, D52), the 2026 block's last raise (MAKEARRAY in S52: old rate, new rate, %, month of the first raised payment), and the raise counts per pay month (MAKEARRAY in C3:E14). A new payment row in 'Dividends received' updates all of it; a new position needs its ticker added in column C of the current year's block. S:V in the 2024 and 2025 blocks stay hand-entered history (raises before the first payment received are not in 'Dividends received'). Raise dates are pay months, not announcement dates. Still excluded from audit checks."
+    },
+    "Dividende lunare": {
+      "role": "payment_calendar"
+    },
+    "Evolutie": {
+      "role": "deposits_and_fx",
+      "_note": "Fixed 2026-08-21 (BACKLOG item 4). H2:J4 used to be absolute references to fixed Total rows (B55/B109/B163) - fragile, since inserting a weekly row would silently shift a year's total onto the wrong cell. Replaced with a year-tag helper column (F1, one ARRAYFORMULA) plus SUMIFS matching on A=\"Total\" and the year tag, so the lookup is by content, not position. Left as _note (not audited) rather than deleted outright, so the fix stays documented instead of the row just going quiet."
+    },
+    "Jurnal": {
+      "role": "transaction_journal"
+    },
+    "Watchlist": {
+      "role": "watchlist",
+      "header_row": 1,
+      "first_data_row": 2,
+      "_note": "Present only in the retired local .xlsx exports. ClaudePortofoliu has no Watchlist sheet (verified 2026-08-01). Kept so a future session does not treat its absence as a missing sheet.",
+      "absent_from_live_sheet": true
+    }
+  },
+  "expected_sectors": {
+    "_comment": "GICS sector per holding, used for a deterministic misclassification check. Keep in sync when adding positions.",
+    "PG": "Consumer Staples",
+    "PEP": "Consumer Staples",
+    "MSFT": "Information Technology",
+    "TXN": "Information Technology",
+    "HD": "Consumer Discretionary",
+    "UNP": "Industrials",
+    "XOM": "Energy",
+    "PFE": "Health Care",
+    "DUK": "Utilities",
+    "JPM": "Financials",
+    "VZ": "Communication Services",
+    "LIN": "Materials",
+    "PLD": "Real Estate",
+    "SPG": "Real Estate",
+    "FRT": "Real Estate",
+    "PLTR": "Information Technology",
+    "META": "Communication Services",
+    "SXR8": "ETF",
+    "BVBETF": "ETF-RO"
+  },
+  "fmp_sector_to_gics": {
+    "_comment": "FMP uses its own sector names; the sheet uses GICS. Translate before comparing, or every row looks like a mismatch. Observed on live holdings 2026-10-11 (19 of 19 agree with expected_sectors): Technology, Healthcare, Consumer Cyclical, Consumer Defensive, Financial Services, Real Estate, Utilities, Communication Services. Basic Materials, Industrials and Energy are still inference - no holding in them.",
+    "Financial Services": "Financials",
+    "Technology": "Information Technology",
+    "Healthcare": "Health Care",
+    "Consumer Cyclical": "Consumer Discretionary",
+    "Consumer Defensive": "Consumer Staples",
+    "Basic Materials": "Materials",
+    "Communication Services": "Communication Services",
+    "Real Estate": "Real Estate",
+    "Utilities": "Utilities",
+    "Industrials": "Industrials",
+    "Energy": "Energy"
+  },
+  "fmp_plan": {
+    "_verified_on": "2026-08-01",
+    "_status": "SUPERSEDED as a fundamentals source. Use the dgi-edgar MCP server for anything statement-derived.",
+    "usable_for": [
+      "quote",
+      "company/profile-symbol"
+    ],
+    "per_symbol_gating": true,
+    "_gating_note": "FMP gates fundamentals per SYMBOL, not per endpoint. Measured with a direct curl on the user's own key: income-statement returns HTTP 200 for 4 of 17 tickers tested and HTTP 402 for the rest. The 402 body reads 'This value set for symbol is not available under your current subscription'.",
+    "_connector_note": "Through the MCP connector the statements, analyst and discountedCashFlow tool families are denied for EVERY symbol, including the four the same key serves fine by curl. The connector runs at a lower tier than the user's key, so upgrading the subscription would not fix it.",
+    "blocked_tools": [
+      "calendar",
+      "directory",
+      "statements",
+      "analyst",
+      "discountedCashFlow"
+    ],
+    "_history_note": "Obsolete: the earlier 5-fiscal-year cap note described a limit that is no longer the binding constraint. Per-symbol gating is."
+  },
+  "custom_price_functions": {
+    "_comment": "Apps Script custom functions covering instruments GOOGLEFINANCE does not. Source lives in setup/apps-script/Code.gs, Part B. KEEP THEM - they are load-bearing for SXR8 and BVBETF.",
+    "MyShares!E24": {
+      "function": "getYahooPrice",
+      "argument": "SXR8.DE",
+      "source": "Yahoo Finance chart API",
+      "currency": "EUR"
+    },
+    "MyShares!E25": {
+      "function": "getBVBPrice",
+      "argument": "BVBETF",
+      "source": "bvb.ro HTML scrape",
+      "currency": "RON"
+    },
+    "timestamp_cell": "MyShares!AC1",
+    "_timestamp_history": "Was MyShares!AA1 until 2026-07-31, when the column insert moved the DGI header into AA1; stamping there would have destroyed it. Moved to AC1 (verified empty) in both Code.gs and here. The trigger itself is still not installed.",
+    "_timestamp_note": "Written by refreshPrices() on a daily trigger. Custom functions cannot write to the sheet, so this is the only freshness marker. Empty means the trigger was never installed - run installPriceRefreshTrigger() once from the editor.",
+    "fixed_defects": [
+      "Romanian thousands separator: parseFloat('1.234,56'.replace(',','.')) returned 1.234, a silent division by a thousand. Now parseRomanianNumber(), 9 cases tested.",
+      "BVB label regex matched 'Ultimul pret' literally and broke on a diacritic, extra whitespace or uppercase. Now tolerant, 6 markup variants verified.",
+      "Failure returned the strings 'N/A' / 'Not found', turning F=D*E into #VALUE!. Now throws, so the cell shows #ERROR! with a specific message.",
+      "Every recalculation hit the source. Now cached 15 minutes per ticker via CacheService."
+    ],
+    "remaining_risk": "Both sources are unofficial - the Yahoo chart endpoint is undocumented and the BVB function scrapes HTML. Neither is a stable contract. They now fail loudly instead of silently, which is the most that can be done from inside the sheet.",
+    "totals_note": "Since step 2 the row 27 aggregates are SUMIFS(x2:x26,$AA$2:$AA$26,TRUE). Rows 24-25 are now inside the range but excluded by AA=FALSE, and SUMIFS does not propagate errors from rows the criteria exclude, so an #ERROR! in E24/E25 still cannot reach the totals. That changes if the criteria are ever widened to include the non-DGI block - SETUP.md has the guard formula for that case."
+  },
+  "reits": [
+    "PLD",
+    "SPG",
+    "FRT"
+  ],
+  "audit_thresholds": {
+    "rounding_tolerance": 0.01,
+    "price_deviation_alert_pct": 0.05,
+    "dividend_deviation_alert_pct": 0.02,
+    "weight_sum_tolerance": 0.005,
+    "max_position_concentration_pct": 0.15,
+    "max_sector_concentration_pct": 0.3
+  },
+  "edgar": {
+    "_comment": "SEC EDGAR XBRL via the dgi-edgar MCP server. Primary source for every statement-derived criterion since 2026-08-01.",
+    "server": "dgi-edgar",
+    "tools": [
+      "edgar_financials",
+      "edgar_tags",
+      "edgar_lookup"
+    ],
+    "api_key_required": false,
+    "user_agent_config": "~/.dgi/edgar.json",
+    "_user_agent_note": "SEC requires a descriptive User-Agent with a contact address and returns 403 without one. A missing config is a loud error, never a fabricated default.",
+    "cache": "~/.dgi/edgar-cache/, 24h TTL",
+    "covers": [
+      "criterion 1",
+      "criterion 3",
+      "criterion 4",
+      "criterion 5",
+      "criterion 6",
+      "criterion 7",
+      "criterion 8",
+      "criterion 9"
+    ],
+    "does_not_cover": [
+      "market prices",
+      "credit ratings",
+      "non-US filers"
+    ],
+    "_gap_note": "No price history anywhere means valuation methods 1-5 cannot be computed. A price-history reducer is the largest open gap in this plugin; report the valuation as unavailable rather than approximating it."
+  }
+}

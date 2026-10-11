@@ -1,0 +1,20 @@
+{
+  "name": "dgi-portfolio",
+  "version": "0.13.1",
+  "description": "Integrity audit for a dividend-growth portfolio (Google Sheets / xlsx) and DGI company analysis using the Dividende.blog methodology: 10-criteria scoring (max 30, floor 10) plus six valuation methods. Separates DGI from tracking-only holdings and handles the Romanian dividend tax change per payment year. Statements and dividends from SEC EDGAR, prices and a second dividend series from Tiingo. Five local MCP servers: Sheets bridge (approved writes), IBKR Flex, SEC EDGAR, prices, Alpha Vantage.",
+  "author": {
+    "name": "cerepx"
+  },
+  "keywords": [
+    "dividends",
+    "dgi",
+    "portfolio",
+    "stocks",
+    "audit",
+    "google-sheets",
+    "valuation",
+    "interactive-brokers",
+    "ibkr"
+  ],
+  "license": "MIT"
+}
